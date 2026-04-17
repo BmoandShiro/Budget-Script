@@ -1,5 +1,8 @@
 var DEBUG = 0;
 var currentSetting = {};
+// Version: v1.1.0
+// Created by BMOandShiro
+// GitHub: https://github.com/BmoandShiro/Budget-Script
 
 /*
 ========================================================
@@ -389,7 +392,8 @@ function getTimeInThisAccount() {
 }
 
 function createLabel(name) {
-  var it = AdWordsApp.labels().withCondition("Name = '" + name + "'").get();
+  // Legacy behavior parity: treat label existence as a CONTAINS match.
+  var it = AdWordsApp.labels().withCondition("Name CONTAINS '" + name + "'").get();
   if (!it.hasNext()) {
     AdWordsApp.createLabel(name);
     Logger.log("Created label: " + name);
@@ -572,10 +576,6 @@ function checkIfLabelIsUsed(scope, labelName) {
 
 function maybeSendEmail(subject, body, emailType) {
   if (!currentSetting.email) return;
-  if (AdWordsApp.getExecutionInfo().isPreview()) {
-    Logger.log("Preview mode: email not sent. Subject: " + subject);
-    return;
-  }
   sendEmailNotifications(currentSetting.email, subject, body, emailType);
 }
 
@@ -583,10 +583,14 @@ function sendEmailNotifications(emailAddresses, subject, body, emailType) {
   var prefix = lower(emailType).indexOf("warning") !== -1 ? "[Warning] " : "[Notification] ";
   var finalSubject = prefix + subject + " - " + AdWordsApp.currentAccount().getName() +
     " (" + AdWordsApp.currentAccount().getCustomerId() + ")";
+  var finalBody = body;
+  if (AdWordsApp.getExecutionInfo().isPreview()) {
+    finalBody = "<b>This script ran in preview mode. No changes were made to your account.</b><br/>" + body;
+  }
   MailApp.sendEmail({
     to: emailAddresses,
     subject: finalSubject,
-    htmlBody: body
+    htmlBody: finalBody
   });
   Logger.log("Email sent to " + emailAddresses + ": " + finalSubject);
 }
