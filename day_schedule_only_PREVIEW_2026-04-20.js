@@ -1,5 +1,5 @@
 var DEBUG = 0;
-// Version: v1.0.5-preview-2026-04-20
+// Version: v1.0.6-preview-2026-04-20
 // Created by BMOandShiro
 // GitHub: https://github.com/BmoandShiro/Budget-Script
 
@@ -79,7 +79,9 @@ var DAY_SCHEDULE_CONFIG = {
   // Quick check before saving: open a calendar, find anchorOpenDate, confirm it matches
   // the weekday name on the left (Friday rule -> must land on Friday).
   //
-  // Weekday rules. Omitted weekdays are treated as closed for schedule purposes.
+  // Weekday rules. Weekdays you omit are NEUTRAL: this script will not pause/re-email for
+  // those days, but it may still re-enable entities carrying scheduleLabelToAdd so Monday
+  // pauses do not carry into Tuesday+ if you only configure Monday.
   // Example A — every other Friday (anchor must be a Friday):
   // daySchedules: {
   //   Friday: { anchorOpenDate: "2026-04-17", repeatEveryWeeks: 2 }
@@ -126,16 +128,43 @@ function main() {
   validateDaySchedules(setting.daySchedules);
 
   var now = getTimeInThisAccount();
-  var openToday = doesScheduleAllowToday(setting.daySchedules, now.weekday, now.yyyyMMdd);
+  var dayRule = setting.daySchedules[now.weekday];
+
+  if (!dayRule) {
+    Logger.log(
+      "No daySchedules rule for " + now.weekday + " (" + now.yyyyMMdd + "). " +
+      "Neutral day: no pause; may re-enable schedule-labeled items only."
+    );
+    var neutralEnabled = reEnableScopedItems(
+      setting,
+      setting.scheduleLabelToAdd,
+      "Re-enabled (day schedule neutral day)"
+    );
+    if (neutralEnabled.count > 0) {
+      maybeSendEmail(
+        setting.email,
+        "Day Schedule - Neutral Day Cleanup",
+        appendEntityDetailsToBody(
+          "Re-enabled " + neutralEnabled.count + " " + getScopeDisplayNamePlural(setting.scope, neutralEnabled.count) +
+          " because today is not a configured schedule weekday (neutral day cleanup).",
+          neutralEnabled.items
+        ),
+        "notification"
+      );
+    }
+    return;
+  }
+
+  var openToday = isDayRuleOpenForDate(dayRule, now.yyyyMMdd);
 
   if (!openToday) {
     var paused = pauseScopedItems(setting, setting.scheduleLabelToAdd, "Paused for day schedule");
     maybeSendEmail(
       setting.email,
-      "Day Schedule - Closed Day",
+      "Day Schedule - Closed Weekday",
       appendEntityDetailsToBody(
         "Paused " + paused.count + " " + getScopeDisplayNamePlural(setting.scope, paused.count) +
-        " because today's day schedule is closed.",
+        " because " + now.weekday + " is configured and today is in a CLOSED week for that rule.",
         paused.items
       ),
       "notification"
@@ -144,10 +173,10 @@ function main() {
     var enabled = reEnableScopedItems(setting, setting.scheduleLabelToAdd, "Re-enabled (day schedule)");
     maybeSendEmail(
       setting.email,
-      "Day Schedule - Open Day",
+      "Day Schedule - Open Weekday",
       appendEntityDetailsToBody(
         "Re-enabled " + enabled.count + " " + getScopeDisplayNamePlural(setting.scope, enabled.count) +
-        " because today's day schedule is open.",
+        " because " + now.weekday + " is configured and today is in an OPEN week for that rule.",
         enabled.items
       ),
       "notification"
@@ -173,12 +202,6 @@ function applyDayScheduleConfig(cfg) {
     email: (cfg.emailTo || "").replace(/\s+/g, ""),
     daySchedules: daySchedules
   };
-}
-
-function doesScheduleAllowToday(daySchedules, weekday, yyyyMMdd) {
-  var dayRule = daySchedules[weekday];
-  if (!dayRule) return false;
-  return isDayRuleOpenForDate(dayRule, yyyyMMdd);
 }
 
 function hasAnyDayScheduleRules(daySchedules) {
