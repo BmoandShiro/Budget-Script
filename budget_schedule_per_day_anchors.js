@@ -1,6 +1,6 @@
 var DEBUG = 0;
 var currentSetting = {};
-// Version: v1.1.0
+// Version: v1.1.1
 // Updated by BMOandShiro
 // GitHub: https://github.com/BmoandShiro/Budget-Script
 // Last Updated: 2026-04-17
@@ -327,6 +327,41 @@ function buildScopedSelector() {
   return selector;
 }
 
+// AWQL LabelNames CONTAINS_ANY throws if that label name does not exist on the account yet.
+function scopedIteratorForReEnableLabel(baseSelector, labelToRemove, logPrefix) {
+  try {
+    return {
+      iterator: baseSelector
+        .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
+        .get(),
+      requireExactLabelOnEntity: false
+    };
+  } catch (e) {
+    Logger.log(
+      logPrefix +
+        " label filter unavailable; using scoped iterator + in-script label check: " +
+        e
+    );
+    return { iterator: baseSelector.get(), requireExactLabelOnEntity: true };
+  }
+}
+
+function shoppingIteratorForReEnableLabel(isCampaigns, labelToRemove, logPrefix) {
+  var base = isCampaigns ? AdWordsApp.shoppingCampaigns() : AdWordsApp.shoppingAdGroups();
+  var kind = isCampaigns ? "shopping campaigns" : "shopping ad groups";
+  try {
+    return {
+      iterator: base.withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']").get(),
+      requireExactLabelOnEntity: false
+    };
+  } catch (e) {
+    Logger.log(
+      logPrefix + " " + kind + ": label filter unavailable; full iterator + label check: " + e
+    );
+    return { iterator: base.get(), requireExactLabelOnEntity: true };
+  }
+}
+
 function getTimeInThisAccount() {
   var tz = AdWordsApp.currentAccount().getTimeZone();
   var d = new Date();
@@ -445,13 +480,17 @@ function reEnableScopedItems(labelToRemove, logPrefix) {
   var details = [];
   var count = 0;
 
-  var iterator = buildScopedSelector()
-    .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
-    .get();
+  var labelIterPack = scopedIteratorForReEnableLabel(buildScopedSelector(), labelToRemove, logPrefix);
+  var iterator = labelIterPack.iterator;
+  var requireExactLabelOnEntity = labelIterPack.requireExactLabelOnEntity;
+
   while (iterator.hasNext()) {
     var item = iterator.next();
+    if (requireExactLabelOnEntity && !entityHasExactLabelName(item, labelToRemove)) {
+      continue;
+    }
+    removeLabelIfPresent(item, labelToRemove, logPrefix);
     item.enable();
-    item.removeLabel(labelToRemove);
     var entityName = getEntityName(item);
     Logger.log(logPrefix + ": " + entityName);
     details.push(entityName);
@@ -460,26 +499,32 @@ function reEnableScopedItems(labelToRemove, logPrefix) {
 
   // Restore old behavior: include shopping entities when scope is campaign/account or ad group.
   if (scope.indexOf("account") !== -1 || scope.indexOf("campaign") !== -1) {
-    var shoppingCampaigns = AdWordsApp.shoppingCampaigns()
-      .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
-      .get();
+    var scPack = shoppingIteratorForReEnableLabel(true, labelToRemove, logPrefix);
+    var shoppingCampaigns = scPack.iterator;
+    var scRequireLabel = scPack.requireExactLabelOnEntity;
     while (shoppingCampaigns.hasNext()) {
       var shoppingCampaign = shoppingCampaigns.next();
+      if (scRequireLabel && !entityHasExactLabelName(shoppingCampaign, labelToRemove)) {
+        continue;
+      }
+      removeLabelIfPresent(shoppingCampaign, labelToRemove, logPrefix);
       shoppingCampaign.enable();
-      shoppingCampaign.removeLabel(labelToRemove);
       var shoppingCampaignName = shoppingCampaign.getName();
       Logger.log(logPrefix + ": " + shoppingCampaignName);
       details.push(shoppingCampaignName);
       count++;
     }
   } else if (scope.indexOf("ad group") !== -1) {
-    var shoppingAdGroups = AdWordsApp.shoppingAdGroups()
-      .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
-      .get();
+    var sagPack = shoppingIteratorForReEnableLabel(false, labelToRemove, logPrefix);
+    var shoppingAdGroups = sagPack.iterator;
+    var sagRequireLabel = sagPack.requireExactLabelOnEntity;
     while (shoppingAdGroups.hasNext()) {
       var shoppingAdGroup = shoppingAdGroups.next();
+      if (sagRequireLabel && !entityHasExactLabelName(shoppingAdGroup, labelToRemove)) {
+        continue;
+      }
+      removeLabelIfPresent(shoppingAdGroup, labelToRemove, logPrefix);
       shoppingAdGroup.enable();
-      shoppingAdGroup.removeLabel(labelToRemove);
       var shoppingAdGroupName = shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName();
       Logger.log(logPrefix + ": " + shoppingAdGroupName);
       details.push(shoppingAdGroupName);
@@ -488,6 +533,38 @@ function reEnableScopedItems(labelToRemove, logPrefix) {
   }
 
   return { count: count, items: details };
+}
+
+function removeLabelIfPresent(item, labelName, logPrefix) {
+  if (!labelName) return;
+  if (!entityHasExactLabelName(item, labelName)) {
+    Logger.log(
+      logPrefix + " skip removeLabel (label not on entity): " +
+      getEntityName(item) + " | expected label: " + labelName
+    );
+    return;
+  }
+  try {
+    item.removeLabel(labelName);
+  } catch (e) {
+    Logger.log(
+      logPrefix + " removeLabel failed (ignored): " + getEntityName(item) +
+      " | label: " + labelName + " | " + e
+    );
+  }
+}
+
+function entityHasExactLabelName(item, labelName) {
+  if (!labelName) return false;
+  try {
+    var it = item.labels().get();
+    while (it.hasNext()) {
+      if (it.next().getName() === labelName) return true;
+    }
+  } catch (e) {
+    Logger.log("Could not read labels for entity; cannot confirm label presence.");
+  }
+  return false;
 }
 
 function getEntityName(item) {
