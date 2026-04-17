@@ -1,5 +1,5 @@
 var DEBUG = 0;
-// Version: v1.0.5
+// Version: v1.0.6
 // Created by BMOandShiro
 // GitHub: https://github.com/BmoandShiro/Budget-Script
 
@@ -309,8 +309,8 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
       );
       continue;
     }
-    item.enable();
     removeLabelIfPresent(item, labelToRemove, logPrefix);
+    item.enable();
     var name = getEntityName(item);
     Logger.log(logPrefix + ": " + name);
     details.push(name);
@@ -329,8 +329,8 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
         );
         continue;
       }
-      shoppingCampaign.enable();
       removeLabelIfPresent(shoppingCampaign, labelToRemove, logPrefix);
+      shoppingCampaign.enable();
       var scName = shoppingCampaign.getName();
       Logger.log(logPrefix + ": " + scName);
       details.push(scName);
@@ -349,8 +349,8 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
         );
         continue;
       }
-      shoppingAdGroup.enable();
       removeLabelIfPresent(shoppingAdGroup, labelToRemove, logPrefix);
+      shoppingAdGroup.enable();
       var sagName = shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName();
       Logger.log(logPrefix + ": " + sagName);
       details.push(sagName);
@@ -362,6 +362,7 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
 }
 
 function removeLabelIfPresent(item, labelName, logPrefix) {
+  if (!labelName) return;
   if (!entityHasExactLabelName(item, labelName)) {
     Logger.log(
       logPrefix + " skip removeLabel (label not on entity): " +
@@ -369,7 +370,14 @@ function removeLabelIfPresent(item, labelName, logPrefix) {
     );
     return;
   }
-  item.removeLabel(labelName);
+  try {
+    item.removeLabel(labelName);
+  } catch (e) {
+    Logger.log(
+      logPrefix + " removeLabel failed (ignored): " + getEntityName(item) +
+      " | label: " + labelName + " | " + e
+    );
+  }
 }
 
 function entityHasExactLabelName(item, labelName) {
