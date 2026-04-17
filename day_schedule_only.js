@@ -1,5 +1,5 @@
 var DEBUG = 0;
-// Version: v1.0.6
+// Version: v1.0.7
 // Created by BMOandShiro
 // GitHub: https://github.com/BmoandShiro/Budget-Script
 
@@ -277,6 +277,41 @@ function buildScopedSelector(setting) {
   return selector;
 }
 
+// AWQL LabelNames CONTAINS_ANY throws if that label name does not exist on the account yet.
+function scopedIteratorForReEnableLabel(baseSelector, labelToRemove, logPrefix) {
+  try {
+    return {
+      iterator: baseSelector
+        .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
+        .get(),
+      requireExactLabelOnEntity: false
+    };
+  } catch (e) {
+    Logger.log(
+      logPrefix +
+        " label filter unavailable; using scoped iterator + in-script label check: " +
+        e
+    );
+    return { iterator: baseSelector.get(), requireExactLabelOnEntity: true };
+  }
+}
+
+function shoppingIteratorForReEnableLabel(isCampaigns, labelToRemove, logPrefix) {
+  var base = isCampaigns ? AdWordsApp.shoppingCampaigns() : AdWordsApp.shoppingAdGroups();
+  var kind = isCampaigns ? "shopping campaigns" : "shopping ad groups";
+  try {
+    return {
+      iterator: base.withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']").get(),
+      requireExactLabelOnEntity: false
+    };
+  } catch (e) {
+    Logger.log(
+      logPrefix + " " + kind + ": label filter unavailable; full iterator + label check: " + e
+    );
+    return { iterator: base.get(), requireExactLabelOnEntity: true };
+  }
+}
+
 function pauseScopedItems(setting, labelToApply, logPrefix) {
   var iterator = buildScopedSelector(setting).withCondition("Status = ENABLED").get();
   var count = 0;
@@ -295,14 +330,21 @@ function pauseScopedItems(setting, labelToApply, logPrefix) {
 
 function reEnableScopedItems(setting, labelToRemove, logPrefix) {
   var scope = lower(setting.scope);
-  var iterator = buildScopedSelector(setting)
-    .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
-    .get();
+  var labelIterPack = scopedIteratorForReEnableLabel(
+    buildScopedSelector(setting),
+    labelToRemove,
+    logPrefix
+  );
+  var iterator = labelIterPack.iterator;
+  var requireExactLabelOnEntity = labelIterPack.requireExactLabelOnEntity;
   var count = 0;
   var details = [];
 
   while (iterator.hasNext()) {
     var item = iterator.next();
+    if (requireExactLabelOnEntity && !entityHasExactLabelName(item, labelToRemove)) {
+      continue;
+    }
     if (entityHasLabelNameContaining(item, setting.legacyBudgetLabelContains)) {
       Logger.log(
         logPrefix + " skipped (legacy budget label still present): " + getEntityName(item)
@@ -318,11 +360,14 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
   }
 
   if (scope.indexOf("account") !== -1 || scope.indexOf("campaign") !== -1) {
-    var shoppingCampaigns = AdWordsApp.shoppingCampaigns()
-      .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
-      .get();
+    var scPack = shoppingIteratorForReEnableLabel(true, labelToRemove, logPrefix);
+    var shoppingCampaigns = scPack.iterator;
+    var scRequireLabel = scPack.requireExactLabelOnEntity;
     while (shoppingCampaigns.hasNext()) {
       var shoppingCampaign = shoppingCampaigns.next();
+      if (scRequireLabel && !entityHasExactLabelName(shoppingCampaign, labelToRemove)) {
+        continue;
+      }
       if (entityHasLabelNameContaining(shoppingCampaign, setting.legacyBudgetLabelContains)) {
         Logger.log(
           logPrefix + " skipped (legacy budget label still present): " + shoppingCampaign.getName()
@@ -337,11 +382,14 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
       count++;
     }
   } else if (scope.indexOf("ad group") !== -1) {
-    var shoppingAdGroups = AdWordsApp.shoppingAdGroups()
-      .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
-      .get();
+    var sagPack = shoppingIteratorForReEnableLabel(false, labelToRemove, logPrefix);
+    var shoppingAdGroups = sagPack.iterator;
+    var sagRequireLabel = sagPack.requireExactLabelOnEntity;
     while (shoppingAdGroups.hasNext()) {
       var shoppingAdGroup = shoppingAdGroups.next();
+      if (sagRequireLabel && !entityHasExactLabelName(shoppingAdGroup, labelToRemove)) {
+        continue;
+      }
       if (entityHasLabelNameContaining(shoppingAdGroup, setting.legacyBudgetLabelContains)) {
         Logger.log(
           logPrefix + " skipped (legacy budget label still present): " +
