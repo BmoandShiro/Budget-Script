@@ -57,6 +57,17 @@ Google Ads Scripts does not provide a rich custom GUI inside the script editor.
 For easier non-technical management, we could potentially move settings to a Google Sheet
 and have this script read configuration from the sheet to make easier for non-technical users to manage.
 
+REPOSITORY
+----------
+Primary repo for this script:
+https://github.com/BmoandShiro/Budget-Script
+
+If this local copy differs from GitHub, treat GitHub main branch as canonical.
+
+MAINTENANCE RULE
+----------------
+IF IT ISN'T BROKE, DON'T FIX IT.
+
 RUN SCHEDULE
 ------------
 Run hourly in Google Ads Scripts for best behavior.
