@@ -93,16 +93,24 @@ function main() {
   // ==============================
   // SCHEDULE SETTINGS (PER-DAY)
   // ==============================
-  currentSetting.useOfficeSchedule = "yes";
   currentSetting.schedulePauseItems = "yes";
   currentSetting.scheduleReEnableItems = "yes";
 
   // Configure each weekday independently.
   // Each day can have its own anchor and repeat cadence.
   // repeatEveryWeeks: 1=weekly, 2=every other week, 3=every 3rd week, etc.
-  currentSetting.daySchedules = {
-    Friday: { anchorOpenDate: "2026-04-17", repeatEveryWeeks: 2 }
-  };
+  // Leave empty to disable weekday cycle overrides.
+  // If at least one weekday rule is provided, schedule overrides are enabled.
+  currentSetting.daySchedules = {};
+  // Example: every other Friday (anchored on an OPEN Friday)
+  // currentSetting.daySchedules = {
+  //   Friday: { anchorOpenDate: "2026-04-17", repeatEveryWeeks: 2 }
+  // };
+  // Example: every Thursday + every 3rd Wednesday
+  // currentSetting.daySchedules = {
+  //   Thursday: { anchorOpenDate: "2026-04-16", repeatEveryWeeks: 1 },
+  //   Wednesday: { anchorOpenDate: "2026-04-22", repeatEveryWeeks: 3 }
+  // };
 
   // Forced closures (holidays, office events, etc).
   // Format: yyyy-MM-dd in account timezone date terms.
@@ -129,7 +137,9 @@ function main() {
   currentSetting.reEnableAtStartOfNewPeriod = lower(currentSetting.reEnableItems) === "yes";
   currentSetting.pauseWhenClosed = lower(currentSetting.schedulePauseItems) === "yes";
   currentSetting.reEnableOnScheduledOpenDay = lower(currentSetting.scheduleReEnableItems) === "yes";
-  currentSetting.officeScheduleEnabled = lower(currentSetting.useOfficeSchedule) === "yes";
+  currentSetting.officeScheduleEnabled =
+    hasAnyDayScheduleRules() ||
+    (currentSetting.forcedClosedDates && currentSetting.forcedClosedDates.length > 0);
 
   switch (currentSetting.budgetPeriod) {
     case "Daily":
@@ -154,7 +164,9 @@ function main() {
   createLabel(currentSetting.budgetLabelToAdd);
   createLabel(currentSetting.scheduleLabelToAdd);
 
-  validateDaySchedules();
+  if (hasAnyDayScheduleRules()) {
+    validateDaySchedules();
+  }
   validateForcedClosedDates();
   validateScope();
 
@@ -167,7 +179,7 @@ function main() {
   var budgetExceeded = isBudgetExceeded();
   var isNewBudgetPeriod = isStartOfNewBudgetPeriod(now.HH, now.dayOfWeek, now.dd);
   var isForcedClosed = isForcedClosedDate(now.yyyyMMdd);
-  var scheduleAllowsToday = currentSetting.officeScheduleEnabled
+  var scheduleAllowsToday = hasAnyDayScheduleRules()
     ? doesScheduleAllowToday(now.weekday, now.yyyyMMdd)
     : true;
   if (isForcedClosed) scheduleAllowsToday = false;
@@ -356,6 +368,14 @@ function getFloat(input) {
 
 function lower(v) {
   return (v || "").toString().toLowerCase();
+}
+
+function hasAnyDayScheduleRules() {
+  if (!currentSetting.daySchedules) return false;
+  for (var day in currentSetting.daySchedules) {
+    if (currentSetting.daySchedules.hasOwnProperty(day)) return true;
+  }
+  return false;
 }
 
 function validateDaySchedules() {
