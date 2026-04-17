@@ -80,7 +80,7 @@ function main() {
   // SCOPE
   // ==============================
   // Campaign | Account | Ad Group | Ad Text | Keyword
-  currentSetting.scope = "Campaign";
+  currentSetting.scope = "Account";
 
   // ==============================
   // BUDGET SETTINGS
