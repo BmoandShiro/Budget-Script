@@ -1,5 +1,5 @@
 var DEBUG = 0;
-// Version: v1.0.3
+// Version: v1.0.4
 // Created by BMOandShiro
 // GitHub: https://github.com/BmoandShiro/Budget-Script
 
@@ -171,7 +171,7 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
       continue;
     }
     item.enable();
-    item.removeLabel(labelToRemove);
+    removeLabelIfPresent(item, labelToRemove, logPrefix);
     var name = getEntityName(item);
     Logger.log(logPrefix + ": " + name);
     details.push(name);
@@ -191,7 +191,7 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
         continue;
       }
       shoppingCampaign.enable();
-      shoppingCampaign.removeLabel(labelToRemove);
+      removeLabelIfPresent(shoppingCampaign, labelToRemove, logPrefix);
       var scName = shoppingCampaign.getName();
       Logger.log(logPrefix + ": " + scName);
       details.push(scName);
@@ -211,7 +211,7 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
         continue;
       }
       shoppingAdGroup.enable();
-      shoppingAdGroup.removeLabel(labelToRemove);
+      removeLabelIfPresent(shoppingAdGroup, labelToRemove, logPrefix);
       var sagName = shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName();
       Logger.log(logPrefix + ": " + sagName);
       details.push(sagName);
@@ -220,6 +220,30 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
   }
 
   return { count: count, items: details };
+}
+
+function removeLabelIfPresent(item, labelName, logPrefix) {
+  if (!entityHasExactLabelName(item, labelName)) {
+    Logger.log(
+      logPrefix + " skip removeLabel (label not on entity): " +
+      getEntityName(item) + " | expected label: " + labelName
+    );
+    return;
+  }
+  item.removeLabel(labelName);
+}
+
+function entityHasExactLabelName(item, labelName) {
+  if (!labelName) return false;
+  try {
+    var it = item.labels().get();
+    while (it.hasNext()) {
+      if (it.next().getName() === labelName) return true;
+    }
+  } catch (e) {
+    Logger.log("Could not read labels for entity; cannot confirm label presence.");
+  }
+  return false;
 }
 
 function entityHasLabelNameContaining(item, needle) {

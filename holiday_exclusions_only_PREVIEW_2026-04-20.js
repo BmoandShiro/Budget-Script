@@ -1,57 +1,31 @@
 var DEBUG = 0;
-// Version: v1.0.4
+// Version: v1.0.4-preview-2026-04-20
 // Created by BMOandShiro
 // GitHub: https://github.com/BmoandShiro/Budget-Script
 
 /*
-Day Schedule Only Script
-========================
-Runs alongside the legacy budget script. Pauses on closed weekdays per rules; re-enables
-only items this script labeled. Skips re-enable if legacy budget pause label is still present.
+PREVIEW TEST COPY — Holiday Exclusions (2026-04-20)
+==================================================
+Duplicate of holiday_exclusions_only.js with CONFIG preset so that **2026-04-20** is a
+forced-closed day. Use Google Ads **Preview** first; delete or stop using this file after
+testing so it is not confused with production.
 
 Non-technical users: edit ONLY the CONFIG section below (between the banner lines).
 
---- How anchorOpenDate works (plain English) ---
-
-Think of anchorOpenDate as the calendar day you pin the pattern to. The script counts how
-many full weeks have passed between anchorOpenDate and "today", then uses repeatEveryWeeks
-to decide if this week is an OPEN week or a CLOSED week for that weekday.
-
-Why you need it:
-Without an anchor, "every other Friday" would be ambiguous — you could mean different
-Fridays depending when you started. The anchor fixes the pattern in time.
-
-How to pick a good anchorOpenDate (3 simple rules):
-
-1) It MUST be the same weekday as the rule key.
-   Example: Friday: { ... }  -> anchorOpenDate must be a Friday (like 2026-04-17).
-
-2) Choose a date on a week you want treated as OPEN for that pattern.
-   Example for "every other Friday": pick a Friday in a week you want ads ON.
-   If you pick the wrong Friday, your open/closed weeks will be shifted — still every
-   two weeks, but on the opposite weeks from what you intended.
-
-3) The date can be in the past or the future; it is only used as a reference point.
-   Many teams pick a known Friday in the near past that was definitely an OPEN week.
-
-repeatEveryWeeks (what the number means):
-- 1 = weekly (that weekday is open every week, as long as the weekday is configured)
-- 2 = every other week (open one week, closed the next, repeating)
-- 3 = every third week (open, then two off-weeks pattern — still anchored to your date)
-
-Valid weekday keys: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+This copy uses a distinct holidayLabelToAdd so test runs do not overlap production labels.
 */
 
 // =============================================================================
 // CONFIG — edit only this block
 // =============================================================================
-var DAY_SCHEDULE_CONFIG = {
+var HOLIDAY_CONFIG = {
   // Comma-separated list (Google Ads MailApp accepts "a@x.com,b@y.com")
   emailTo: "alec@risedds.com,nic@risedds.com",
 
   // Campaign | Account | Ad Group | Ad Text | Keyword
   scope: "Account",
 
+  // Optional: only affect entities that already have this label (empty = all in scope)
   labelName: "",
 
   // Optional (Campaign / Account scope only): only campaigns whose name contains this text
@@ -59,84 +33,67 @@ var DAY_SCHEDULE_CONFIG = {
   // campaignNameContains: "Search - "   or   campaignNameContains: "Brand"
   campaignNameContains: "",
 
+  // Substring that appears in the legacy budget pause label, e.g. "stopped by budget script (Monthly)"
   legacyBudgetLabelContains: "stopped by budget script",
 
-  scheduleLabelToAdd: "stopped by day schedule script",
+  // Distinct label for this preview copy only (avoid colliding with production script label)
+  holidayLabelToAdd: "stopped by holiday exclusions script (PREVIEW 2026-04-20)",
 
-  // --- daySchedules (what to put in anchorOpenDate) ---
-  //
-  // For each weekday you list below:
-  // - anchorOpenDate = yyyy-MM-dd on THAT weekday = "week 0" of your pattern for this rule
-  // - repeatEveryWeeks = how many weeks between open weeks for this weekday
-  //
-  // Quick check before saving: open a calendar, find anchorOpenDate, confirm it matches
-  // the weekday name on the left (Friday rule -> must land on Friday).
-  //
-  // Weekday rules. Omitted weekdays are treated as closed for schedule purposes.
-  // Example A — every other Friday (anchor must be a Friday):
-  // daySchedules: {
-  //   Friday: { anchorOpenDate: "2026-04-17", repeatEveryWeeks: 2 }
-  // },
-  //
-  // Example B — open every Monday and Thursday (weekly):
-  // daySchedules: {
-  //   Monday: { anchorOpenDate: "2026-04-13", repeatEveryWeeks: 1 },
-  //   Thursday: { anchorOpenDate: "2026-04-16", repeatEveryWeeks: 1 }
-  // },
-  //
-  // Example C — Wednesday every 3 weeks from anchor:
-  // daySchedules: {
-  //   Wednesday: { anchorOpenDate: "2026-04-22", repeatEveryWeeks: 3 }
-  // },
-  //
-  // Example D — different cadence per day (Thu weekly + Wed every 3rd week):
-  // daySchedules: {
-  //   Thursday: { anchorOpenDate: "2026-04-16", repeatEveryWeeks: 1 },
-  //   Wednesday: { anchorOpenDate: "2026-04-22", repeatEveryWeeks: 3 }
-  // },
+  // Dates (yyyy-MM-dd, account timezone) when ads should stay OFF.
+  // This preview copy includes Monday 2026-04-20 so you can test the "closed day" branch.
+  forcedClosedDates: [
+    "2026-04-20"
+  ]
 
-  daySchedules: {}
+  // More examples (uncomment and merge into the array above):
+  // - US Thanksgiving + day after:
+  //   "2026-11-26", "2026-11-27"
+  // - Long weekend (Fri–Mon):
+  //   "2026-09-04", "2026-09-05", "2026-09-06", "2026-09-07"
+  // - Company retreat (single week, list each date):
+  //   "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"
 };
 
-// ================================================================================================
+//  ================================================================================================
 // SCRIPT LOGIC — do not make edits below this line unless you are comfortable with code changes
 // ================================================================================================
 
 function main() {
-  var setting = applyDayScheduleConfig(DAY_SCHEDULE_CONFIG);
+  var setting = applyHolidayConfig(HOLIDAY_CONFIG);
+  setting.currencyCode = AdWordsApp.currentAccount().getCurrencyCode();
 
-  createLabel(setting.scheduleLabelToAdd);
+  createLabel(setting.holidayLabelToAdd);
   validateScope(setting.scope);
+  validateForcedClosedDates(setting.forcedClosedDates);
 
-  if (!setting.daySchedules || !hasAnyDayScheduleRules(setting.daySchedules)) {
-    Logger.log("daySchedules is empty. Day schedule script will take no action.");
+  if (!setting.forcedClosedDates || setting.forcedClosedDates.length === 0) {
+    Logger.log("forcedClosedDates is empty. Holiday exclusions script will take no action.");
     return;
   }
-  validateDaySchedules(setting.daySchedules);
 
   var now = getTimeInThisAccount();
-  var openToday = doesScheduleAllowToday(setting.daySchedules, now.weekday, now.yyyyMMdd);
+  var isClosed = isForcedClosedDate(setting.forcedClosedDates, now.yyyyMMdd);
 
-  if (!openToday) {
-    var paused = pauseScopedItems(setting, setting.scheduleLabelToAdd, "Paused for day schedule");
+  if (isClosed) {
+    var paused = pauseScopedItems(setting, setting.holidayLabelToAdd, "Paused for holiday exclusion");
     maybeSendEmail(
       setting.email,
-      "Day Schedule - Closed Day",
+      "Holiday Exclusion - Closed Day",
       appendEntityDetailsToBody(
         "Paused " + paused.count + " " + getScopeDisplayNamePlural(setting.scope, paused.count) +
-        " because today's day schedule is closed.",
+        " because today is listed in forcedClosedDates.",
         paused.items
       ),
       "notification"
     );
   } else {
-    var enabled = reEnableScopedItems(setting, setting.scheduleLabelToAdd, "Re-enabled (day schedule)");
+    var enabled = reEnableScopedItems(setting, setting.holidayLabelToAdd, "Re-enabled (holiday exclusions)");
     maybeSendEmail(
       setting.email,
-      "Day Schedule - Open Day",
+      "Holiday Exclusion - Open Day",
       appendEntityDetailsToBody(
         "Re-enabled " + enabled.count + " " + getScopeDisplayNamePlural(setting.scope, enabled.count) +
-        " because today's day schedule is open.",
+        " because today is not in forcedClosedDates.",
         enabled.items
       ),
       "notification"
@@ -144,87 +101,16 @@ function main() {
   }
 }
 
-function applyDayScheduleConfig(cfg) {
-  var daySchedules = {};
-  if (cfg.daySchedules) {
-    for (var d in cfg.daySchedules) {
-      if (cfg.daySchedules.hasOwnProperty(d)) {
-        daySchedules[d] = cfg.daySchedules[d];
-      }
-    }
-  }
+function applyHolidayConfig(cfg) {
   return {
     scope: cfg.scope,
     labelName: cfg.labelName || "",
     campaignNameContains: cfg.campaignNameContains || "",
     legacyBudgetLabelContains: cfg.legacyBudgetLabelContains || "",
-    scheduleLabelToAdd: cfg.scheduleLabelToAdd,
+    holidayLabelToAdd: cfg.holidayLabelToAdd,
     email: (cfg.emailTo || "").replace(/\s+/g, ""),
-    daySchedules: daySchedules
+    forcedClosedDates: cfg.forcedClosedDates ? cfg.forcedClosedDates.slice() : []
   };
-}
-
-function doesScheduleAllowToday(daySchedules, weekday, yyyyMMdd) {
-  var dayRule = daySchedules[weekday];
-  if (!dayRule) return false;
-  return isDayRuleOpenForDate(dayRule, yyyyMMdd);
-}
-
-function hasAnyDayScheduleRules(daySchedules) {
-  for (var day in daySchedules) {
-    if (daySchedules.hasOwnProperty(day)) return true;
-  }
-  return false;
-}
-
-function isDayRuleOpenForDate(dayRule, yyyyMMdd) {
-  var weeks = getWeeksSinceReference(yyyyMMdd, dayRule.anchorOpenDate);
-  if (weeks < 0) return false;
-  return weeks % dayRule.repeatEveryWeeks === 0;
-}
-
-function getWeeksSinceReference(todayString, refString) {
-  var t = parseDateUTC(todayString);
-  var r = parseDateUTC(refString);
-  var diffDays = Math.floor((t - r) / 86400000);
-  return Math.floor(diffDays / 7);
-}
-
-function parseDateUTC(s) {
-  var p = s.split("-");
-  return Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
-}
-
-function validateDaySchedules(daySchedules) {
-  var validDays = {
-    Monday: true,
-    Tuesday: true,
-    Wednesday: true,
-    Thursday: true,
-    Friday: true,
-    Saturday: true,
-    Sunday: true
-  };
-
-  var dayCount = 0;
-  for (var day in daySchedules) {
-    if (!daySchedules.hasOwnProperty(day)) continue;
-    dayCount++;
-
-    if (!validDays[day]) throw new Error("Invalid weekday in daySchedules: " + day);
-
-    var rule = daySchedules[day];
-    if (!rule.anchorOpenDate || !/^\d{4}-\d{2}-\d{2}$/.test(rule.anchorOpenDate)) {
-      throw new Error("Invalid anchorOpenDate for " + day + ": " + rule.anchorOpenDate);
-    }
-    if (!rule.repeatEveryWeeks || rule.repeatEveryWeeks < 1) {
-      throw new Error("repeatEveryWeeks must be >= 1 for " + day);
-    }
-  }
-
-  if (dayCount === 0) {
-    throw new Error("daySchedules is empty. Add at least one weekday rule.");
-  }
 }
 
 function buildScopedSelector(setting) {
@@ -374,6 +260,21 @@ function entityHasLabelNameContaining(item, needle) {
   return false;
 }
 
+function isForcedClosedDate(dates, yyyyMMdd) {
+  for (var i = 0; i < dates.length; i++) {
+    if (dates[i] === yyyyMMdd) return true;
+  }
+  return false;
+}
+
+function validateForcedClosedDates(dates) {
+  for (var i = 0; i < dates.length; i++) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dates[i])) {
+      throw new Error("Invalid forcedClosedDates entry: " + dates[i] + ". Use yyyy-MM-dd.");
+    }
+  }
+}
+
 function validateScope(scope) {
   var s = lower(scope);
   if (
@@ -399,7 +300,6 @@ function getTimeInThisAccount() {
   var tz = AdWordsApp.currentAccount().getTimeZone();
   var d = new Date();
   return {
-    weekday: Utilities.formatDate(d, tz, "EEEE"),
     yyyyMMdd: Utilities.formatDate(d, tz, "yyyy-MM-dd")
   };
 }

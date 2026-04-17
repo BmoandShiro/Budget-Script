@@ -1,13 +1,19 @@
 var DEBUG = 0;
-// Version: v1.0.4
+// Version: v1.0.5-preview-2026-04-20
 // Created by BMOandShiro
 // GitHub: https://github.com/BmoandShiro/Budget-Script
 
 /*
-Day Schedule Only Script
-========================
-Runs alongside the legacy budget script. Pauses on closed weekdays per rules; re-enables
-only items this script labeled. Skips re-enable if legacy budget pause label is still present.
+PREVIEW TEST COPY — Day schedule (closed Monday 2026-04-20)
+==========================================================
+Duplicate of day_schedule_only.js with CONFIG preset so **Monday 2026-04-20** is a CLOSED
+day for schedule testing:
+- Monday anchor **2026-04-13** (open week)
+- **repeatEveryWeeks: 2** (every other Monday)
+=> **2026-04-20** lands in the "off" week.
+
+Use Google Ads **Preview** first; delete or stop using this file after testing so it is not
+confused with production.
 
 Non-technical users: edit ONLY the CONFIG section below (between the banner lines).
 
@@ -61,7 +67,8 @@ var DAY_SCHEDULE_CONFIG = {
 
   legacyBudgetLabelContains: "stopped by budget script",
 
-  scheduleLabelToAdd: "stopped by day schedule script",
+  // Distinct label for this preview copy only (avoid colliding with production script label)
+  scheduleLabelToAdd: "stopped by day schedule script (PREVIEW 2026-04-20)",
 
   // --- daySchedules (what to put in anchorOpenDate) ---
   //
@@ -95,7 +102,11 @@ var DAY_SCHEDULE_CONFIG = {
   //   Wednesday: { anchorOpenDate: "2026-04-22", repeatEveryWeeks: 3 }
   // },
 
-  daySchedules: {}
+  // Preview intent: Monday 2026-04-20 should be CLOSED (biweekly Mondays).
+  // 2026-04-13 is Monday (OPEN anchor week) -> 2026-04-20 is Monday (CLOSED week).
+  daySchedules: {
+    Monday: { anchorOpenDate: "2026-04-13", repeatEveryWeeks: 2 }
+  }
 };
 
 // ================================================================================================
