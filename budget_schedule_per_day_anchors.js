@@ -1,29 +1,15 @@
 var DEBUG = 0;
 var currentSetting = {};
 // Version: v1.1.0
-// Created by BMOandShiro
+// Updated by BMOandShiro
 // GitHub: https://github.com/BmoandShiro/Budget-Script
+// Last Updated: 2026-04-17
+// Original Creator: Unknown
 
 /*
 ========================================================
 GOOGLE ADS SCRIPT - BUDGET + PER-DAY SCHEDULE CONTROL
 ========================================================
-
-WHAT THIS SCRIPT DOES
----------------------
-1) Budget control:
-   - Checks account spend for the chosen budgetPeriod.
-   - Pauses campaigns when spend exceeds maxCost.
-   - Labels those campaigns with budgetLabelToAdd.
-
-2) Schedule control:
-   - Supports independent weekday cycles using per-day anchors.
-   - Example:
-     - Wednesday open every 2 weeks anchored to 2026-04-22
-     - Thursday open every 2 weeks anchored to 2026-04-29
-   - Pauses campaigns on days/weeks that are not open.
-   - Labels those campaigns with scheduleLabelToAdd.
-   - Also supports forced-closed dates (holidays, office closures).
 
 WHY PER-DAY ANCHORS
 -------------------
@@ -33,43 +19,6 @@ If all days share one cycle, this still works.
 VALID WEEKDAY NAMES
 -------------------
 Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
-
-SETUP EXAMPLES
---------------
-1) Default simple setup: every other Friday
-   daySchedules = {
-     Friday: { anchorOpenDate: "2026-04-17", repeatEveryWeeks: 2 }
-   }
-
-2) Every other Thursday + every 3rd Wednesday
-   daySchedules = {
-     Thursday: { anchorOpenDate: "2026-04-16", repeatEveryWeeks: 2 },
-     Wednesday: { anchorOpenDate: "2026-04-22", repeatEveryWeeks: 3 }
-   }
-
-3) Add holidays / forced closures (yyyy-MM-dd)
-   forcedClosedDates = [
-     "2026-11-26",
-     "2026-12-25"
-   ];
-   Any date in forcedClosedDates is treated as CLOSED, even if schedule says open.
-
-GUI NOTE
---------
-Google Ads Scripts does not provide a rich custom GUI inside the script editor.
-For easier non-technical management, we could potentially move settings to a Google Sheet
-and have this script read configuration from the sheet to make easier for non-technical users to manage.
-
-REPOSITORY
-----------
-Primary repo for this script:
-https://github.com/BmoandShiro/Budget-Script
-
-If this local copy differs from GitHub, treat GitHub main branch as canonical.
-
-MAINTENANCE RULE
-----------------
-IF IT ISN'T BROKE, DON'T FIX IT.
 
 RUN SCHEDULE
 ------------
