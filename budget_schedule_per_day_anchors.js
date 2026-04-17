@@ -198,8 +198,11 @@ function main() {
     var reEnabledBudget = reEnableBudgetItems();
     maybeSendEmail(
       "Budget Period Reset",
-      "Re-enabled " + reEnabledBudget + " " + getScopeDisplayNamePlural(reEnabledBudget) +
-      " at start of new " + currentSetting.budgetPeriod + " period.",
+      appendEntityDetailsToBody(
+        "Re-enabled " + reEnabledBudget.count + " " + getScopeDisplayNamePlural(reEnabledBudget.count) +
+        " at start of new " + currentSetting.budgetPeriod + " period.",
+        reEnabledBudget.items
+      ),
       "notification"
     );
   }
@@ -210,8 +213,11 @@ function main() {
     var reEnabledSchedule = reEnableScheduleItems();
     maybeSendEmail(
       "Schedule Open Day Re-Enable",
-      "Re-enabled " + reEnabledSchedule + " " + getScopeDisplayNamePlural(reEnabledSchedule) +
-      " due to open schedule day.",
+      appendEntityDetailsToBody(
+        "Re-enabled " + reEnabledSchedule.count + " " + getScopeDisplayNamePlural(reEnabledSchedule.count) +
+        " due to open schedule day.",
+        reEnabledSchedule.items
+      ),
       "notification"
     );
   }
@@ -221,9 +227,12 @@ function main() {
     var pausedForBudget = pauseForBudget();
     maybeSendEmail(
       "Budget Exceeded",
-      "Paused " + pausedForBudget + " " + getScopeDisplayNamePlural(pausedForBudget) +
-      " because " + currentSetting.budgetPeriod + " cost exceeded " +
-      currentSetting.currencyCode + " " + currentSetting.maxCost.toFixed(2) + ".",
+      appendEntityDetailsToBody(
+        "Paused " + pausedForBudget.count + " " + getScopeDisplayNamePlural(pausedForBudget.count) +
+        " because " + currentSetting.budgetPeriod + " cost exceeded " +
+        currentSetting.currencyCode + " " + currentSetting.maxCost.toFixed(2) + ".",
+        pausedForBudget.items
+      ),
       "warning"
     );
   }
@@ -233,15 +242,35 @@ function main() {
     var scheduleReason = isForcedClosed ? "forced-closed date" : "closed office schedule";
     maybeSendEmail(
       "Schedule Closed Pause",
-      "Paused " + pausedForSchedule + " " + getScopeDisplayNamePlural(pausedForSchedule) +
-      " because today is " + scheduleReason + ".",
+      appendEntityDetailsToBody(
+        "Paused " + pausedForSchedule.count + " " + getScopeDisplayNamePlural(pausedForSchedule.count) +
+        " because today is " + scheduleReason + ".",
+        pausedForSchedule.items
+      ),
       "notification"
     );
   }
 }
 
 function pauseForBudget() {
-  return pauseScopedItems(currentSetting.budgetLabelToAdd, "Paused for budget");
+  var scope = lower(currentSetting.scope);
+  if (scope.indexOf("account") !== -1) {
+    return pauseScopedItems(currentSetting.budgetLabelToAdd, "Paused for budget");
+  }
+
+  var exceeded = getBudgetExceededScopedItems();
+  var count = 0;
+  var details = [];
+  for (var i = 0; i < exceeded.length; i++) {
+    var row = exceeded[i];
+    row.item.pause();
+    row.item.applyLabel(currentSetting.budgetLabelToAdd);
+    Logger.log("Paused for budget: " + row.name + " | Cost: " + currentSetting.currencyCode + " " + row.cost.toFixed(2));
+    details.push(row.name + " | Cost: " + currentSetting.currencyCode + " " + row.cost.toFixed(2));
+    count++;
+  }
+
+  return { count: count, items: details };
 }
 
 function pauseForSchedule() {
@@ -257,6 +286,11 @@ function reEnableScheduleItems() {
 }
 
 function isBudgetExceeded() {
+  var scope = lower(currentSetting.scope);
+  if (scope.indexOf("account") === -1) {
+    return getBudgetExceededScopedItems().length > 0;
+  }
+
   var rows = AdWordsApp.report(
     "SELECT Cost FROM ACCOUNT_PERFORMANCE_REPORT DURING " + currentSetting.dateRange
   ).rows();
@@ -440,29 +474,67 @@ function getWeekdayNameFromUTC(yyyyMMdd) {
 function pauseScopedItems(labelToApply, logPrefix) {
   var iterator = buildScopedSelector().withCondition("Status = ENABLED").get();
   var count = 0;
+  var details = [];
   while (iterator.hasNext()) {
     var item = iterator.next();
     item.pause();
     item.applyLabel(labelToApply);
-    Logger.log(logPrefix + ": " + getEntityName(item));
+    var entityName = getEntityName(item);
+    Logger.log(logPrefix + ": " + entityName);
+    details.push(entityName);
     count++;
   }
-  return count;
+  return { count: count, items: details };
 }
 
 function reEnableScopedItems(labelToRemove, logPrefix) {
+  var scope = lower(currentSetting.scope);
+  var details = [];
+  var count = 0;
+
   var iterator = buildScopedSelector()
     .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
     .get();
-  var count = 0;
   while (iterator.hasNext()) {
     var item = iterator.next();
     item.enable();
     item.removeLabel(labelToRemove);
-    Logger.log(logPrefix + ": " + getEntityName(item));
+    var entityName = getEntityName(item);
+    Logger.log(logPrefix + ": " + entityName);
+    details.push(entityName);
     count++;
   }
-  return count;
+
+  // Restore old behavior: include shopping entities when scope is campaign/account or ad group.
+  if (scope.indexOf("account") !== -1 || scope.indexOf("campaign") !== -1) {
+    var shoppingCampaigns = AdWordsApp.shoppingCampaigns()
+      .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
+      .get();
+    while (shoppingCampaigns.hasNext()) {
+      var shoppingCampaign = shoppingCampaigns.next();
+      shoppingCampaign.enable();
+      shoppingCampaign.removeLabel(labelToRemove);
+      var shoppingCampaignName = shoppingCampaign.getName();
+      Logger.log(logPrefix + ": " + shoppingCampaignName);
+      details.push(shoppingCampaignName);
+      count++;
+    }
+  } else if (scope.indexOf("ad group") !== -1) {
+    var shoppingAdGroups = AdWordsApp.shoppingAdGroups()
+      .withCondition("LabelNames CONTAINS_ANY ['" + labelToRemove + "']")
+      .get();
+    while (shoppingAdGroups.hasNext()) {
+      var shoppingAdGroup = shoppingAdGroups.next();
+      shoppingAdGroup.enable();
+      shoppingAdGroup.removeLabel(labelToRemove);
+      var shoppingAdGroupName = shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName();
+      Logger.log(logPrefix + ": " + shoppingAdGroupName);
+      details.push(shoppingAdGroupName);
+      count++;
+    }
+  }
+
+  return { count: count, items: details };
 }
 
 function getEntityName(item) {
@@ -527,4 +599,31 @@ function getScopeDisplayNamePlural(count) {
   else if (s.indexOf("ad text") !== -1) base = "ad";
   else if (s.indexOf("keyword") !== -1) base = "keyword";
   return count === 1 ? base : base + "s";
+}
+
+function getBudgetExceededScopedItems() {
+  var iterator = buildScopedSelector().withCondition("Status = ENABLED").get();
+  var exceeded = [];
+  while (iterator.hasNext()) {
+    var item = iterator.next();
+    var cost = getFloat(item.getStatsFor(currentSetting.dateRange).getCost());
+    if (cost > currentSetting.maxCost) {
+      exceeded.push({
+        item: item,
+        cost: cost,
+        name: getEntityName(item)
+      });
+    }
+  }
+  return exceeded;
+}
+
+function appendEntityDetailsToBody(baseBody, entityNames) {
+  if (!entityNames || entityNames.length === 0) return baseBody;
+  var body = baseBody + "<br/><br/>Items:<br/><ul>";
+  for (var i = 0; i < entityNames.length; i++) {
+    body += "<li>" + entityNames[i] + "</li>";
+  }
+  body += "</ul>";
+  return body;
 }
