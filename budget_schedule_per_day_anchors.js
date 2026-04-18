@@ -1,6 +1,6 @@
 var DEBUG = 0;
 var currentSetting = {};
-// Version: v1.1.1
+// Version: v1.1.2
 // Updated by BMOandShiro
 // GitHub: https://github.com/BmoandShiro/Budget-Script
 // Last Updated: 2026-04-17
@@ -215,11 +215,19 @@ function pauseForBudget() {
   var details = [];
   for (var i = 0; i < exceeded.length; i++) {
     var row = exceeded[i];
+    var labelNewlyApplied = !entityHasExactLabelName(row.item, currentSetting.budgetLabelToAdd);
     row.item.pause();
     row.item.applyLabel(currentSetting.budgetLabelToAdd);
-    Logger.log("Paused for budget: " + row.name + " | Cost: " + currentSetting.currencyCode + " " + row.cost.toFixed(2));
-    details.push(row.name + " | Cost: " + currentSetting.currencyCode + " " + row.cost.toFixed(2));
-    count++;
+    if (labelNewlyApplied) {
+      Logger.log("Paused for budget: " + row.name + " | Cost: " + currentSetting.currencyCode + " " + row.cost.toFixed(2));
+      details.push(row.name + " | Cost: " + currentSetting.currencyCode + " " + row.cost.toFixed(2));
+      count++;
+    } else {
+      Logger.log(
+        "Paused for budget (already had pause label, omitted from notification): " + row.name +
+        " | Cost: " + currentSetting.currencyCode + " " + row.cost.toFixed(2)
+      );
+    }
   }
 
   return { count: count, items: details };
@@ -465,12 +473,17 @@ function pauseScopedItems(labelToApply, logPrefix) {
   var details = [];
   while (iterator.hasNext()) {
     var item = iterator.next();
+    var labelNewlyApplied = !entityHasExactLabelName(item, labelToApply);
     item.pause();
     item.applyLabel(labelToApply);
-    var entityName = getEntityName(item);
-    Logger.log(logPrefix + ": " + entityName);
-    details.push(entityName);
-    count++;
+    if (labelNewlyApplied) {
+      var entityName = getEntityName(item);
+      Logger.log(logPrefix + ": " + entityName);
+      details.push(entityName);
+      count++;
+    } else {
+      Logger.log(logPrefix + " (already had pause label, omitted from notification): " + getEntityName(item));
+    }
   }
   return { count: count, items: details };
 }
@@ -489,12 +502,20 @@ function reEnableScopedItems(labelToRemove, logPrefix) {
     if (requireExactLabelOnEntity && !entityHasExactLabelName(item, labelToRemove)) {
       continue;
     }
+    var hadPauseLabel = entityHasExactLabelName(item, labelToRemove);
     removeLabelIfPresent(item, labelToRemove, logPrefix);
     item.enable();
-    var entityName = getEntityName(item);
-    Logger.log(logPrefix + ": " + entityName);
-    details.push(entityName);
-    count++;
+    if (hadPauseLabel) {
+      var entityName = getEntityName(item);
+      Logger.log(logPrefix + ": " + entityName);
+      details.push(entityName);
+      count++;
+    } else {
+      Logger.log(
+        logPrefix + " (no exact pause label before re-enable, omitted from notification): " +
+        getEntityName(item)
+      );
+    }
   }
 
   // Restore old behavior: include shopping entities when scope is campaign/account or ad group.
@@ -507,12 +528,20 @@ function reEnableScopedItems(labelToRemove, logPrefix) {
       if (scRequireLabel && !entityHasExactLabelName(shoppingCampaign, labelToRemove)) {
         continue;
       }
+      var scHadPauseLabel = entityHasExactLabelName(shoppingCampaign, labelToRemove);
       removeLabelIfPresent(shoppingCampaign, labelToRemove, logPrefix);
       shoppingCampaign.enable();
-      var shoppingCampaignName = shoppingCampaign.getName();
-      Logger.log(logPrefix + ": " + shoppingCampaignName);
-      details.push(shoppingCampaignName);
-      count++;
+      if (scHadPauseLabel) {
+        var shoppingCampaignName = shoppingCampaign.getName();
+        Logger.log(logPrefix + ": " + shoppingCampaignName);
+        details.push(shoppingCampaignName);
+        count++;
+      } else {
+        Logger.log(
+          logPrefix + " (no exact pause label before re-enable, omitted from notification): " +
+          shoppingCampaign.getName()
+        );
+      }
     }
   } else if (scope.indexOf("ad group") !== -1) {
     var sagPack = shoppingIteratorForReEnableLabel(false, labelToRemove, logPrefix);
@@ -523,12 +552,20 @@ function reEnableScopedItems(labelToRemove, logPrefix) {
       if (sagRequireLabel && !entityHasExactLabelName(shoppingAdGroup, labelToRemove)) {
         continue;
       }
+      var sagHadPauseLabel = entityHasExactLabelName(shoppingAdGroup, labelToRemove);
       removeLabelIfPresent(shoppingAdGroup, labelToRemove, logPrefix);
       shoppingAdGroup.enable();
-      var shoppingAdGroupName = shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName();
-      Logger.log(logPrefix + ": " + shoppingAdGroupName);
-      details.push(shoppingAdGroupName);
-      count++;
+      if (sagHadPauseLabel) {
+        var shoppingAdGroupName = shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName();
+        Logger.log(logPrefix + ": " + shoppingAdGroupName);
+        details.push(shoppingAdGroupName);
+        count++;
+      } else {
+        Logger.log(
+          logPrefix + " (no exact pause label before re-enable, omitted from notification): " +
+          shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName()
+        );
+      }
     }
   }
 
