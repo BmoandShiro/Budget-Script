@@ -17,7 +17,7 @@ Non-technical users: edit ONLY the CONFIG section below (between the banner line
 // =============================================================================
 var HOLIDAY_CONFIG = {
   // Comma-separated list (Google Ads MailApp accepts "a@x.com,b@y.com")
-  emailTo: "alec@risedds.com,nic@risedds.com",
+  emailTo: "alec@risedds.com,nic@risedds.com,drake@risedds.com,christian@risedds.com",
 
   // Campaign | Account | Ad Group | Ad Text | Keyword
   scope: "Account",
