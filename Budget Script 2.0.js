@@ -1,4 +1,6 @@
 DEBUG = 0;
+// Modified by BMOandShiro
+// GitHub: https://github.com/BmoandShiro/Budget-Script
  
 function main() {
 
