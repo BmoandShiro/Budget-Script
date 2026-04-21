@@ -35,6 +35,7 @@ var HOLIDAY_CONFIG = {
 
   // Substring that appears in the legacy budget pause label, e.g. "stopped by budget script (Monthly)"
   legacyBudgetLabelContains: "stopped by budget script",
+  dayScheduleLabelContains: "stopped by day schedule script",
 
   // Distinct label for this preview copy only (avoid colliding with production script label)
   holidayLabelToAdd: "stopped by holiday exclusions script (PREVIEW 2026-04-20)",
@@ -220,6 +221,7 @@ function applyHolidayConfig(cfg) {
     labelName: cfg.labelName || "",
     campaignNameContains: cfg.campaignNameContains || "",
     legacyBudgetLabelContains: cfg.legacyBudgetLabelContains || "",
+    dayScheduleLabelContains: cfg.dayScheduleLabelContains || "",
     holidayLabelToAdd: cfg.holidayLabelToAdd,
     email: (cfg.emailTo || "").replace(/\s+/g, ""),
     forcedClosedDates: cfg.forcedClosedDates ? cfg.forcedClosedDates.slice() : []
@@ -330,6 +332,12 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
       );
       continue;
     }
+    if (entityHasLabelNameContaining(item, setting.dayScheduleLabelContains)) {
+      Logger.log(
+        logPrefix + " skipped (day schedule label still present): " + getEntityName(item)
+      );
+      continue;
+    }
     var hadPauseLabel = entityHasExactLabelName(item, labelToRemove);
     removeLabelIfPresent(item, labelToRemove, logPrefix);
     item.enable();
@@ -361,6 +369,12 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
         );
         continue;
       }
+      if (entityHasLabelNameContaining(shoppingCampaign, setting.dayScheduleLabelContains)) {
+        Logger.log(
+          logPrefix + " skipped (day schedule label still present): " + shoppingCampaign.getName()
+        );
+        continue;
+      }
       var scHadPauseLabel = entityHasExactLabelName(shoppingCampaign, labelToRemove);
       removeLabelIfPresent(shoppingCampaign, labelToRemove, logPrefix);
       shoppingCampaign.enable();
@@ -388,6 +402,13 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
       if (entityHasLabelNameContaining(shoppingAdGroup, setting.legacyBudgetLabelContains)) {
         Logger.log(
           logPrefix + " skipped (legacy budget label still present): " +
+          shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName()
+        );
+        continue;
+      }
+      if (entityHasLabelNameContaining(shoppingAdGroup, setting.dayScheduleLabelContains)) {
+        Logger.log(
+          logPrefix + " skipped (day schedule label still present): " +
           shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName()
         );
         continue;
