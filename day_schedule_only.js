@@ -49,7 +49,7 @@ Valid weekday keys: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sund
 // =============================================================================
 var DAY_SCHEDULE_CONFIG = {
   // Comma-separated list (Google Ads MailApp accepts "a@x.com,b@y.com")
-  emailTo: "alec@risedds.com,nic@risedds.com",
+  emailTo: "alec@risedds.com,nic@risedds.com,drake@risedds.com,christian@risedds.com",
 
   // Campaign | Account | Ad Group | Ad Text | Keyword
   scope: "Account",
@@ -62,6 +62,7 @@ var DAY_SCHEDULE_CONFIG = {
   campaignNameContains: "",
 
   legacyBudgetLabelContains: "stopped by budget script",
+  holidayLabelContains: "stopped by holiday exclusions script",
 
   scheduleLabelToAdd: "stopped by day schedule script",
 
@@ -99,7 +100,9 @@ var DAY_SCHEDULE_CONFIG = {
   //   Wednesday: { anchorOpenDate: "2026-04-22", repeatEveryWeeks: 3 }
   // },
 
-  daySchedules: {}
+  daySchedules: {
+    Friday: { anchorOpenDate: "2026-04-24", repeatEveryWeeks: 2 }
+  }
 };
 
 // ================================================================================================
@@ -193,6 +196,7 @@ function applyDayScheduleConfig(cfg) {
     labelName: cfg.labelName || "",
     campaignNameContains: cfg.campaignNameContains || "",
     legacyBudgetLabelContains: cfg.legacyBudgetLabelContains || "",
+    holidayLabelContains: cfg.holidayLabelContains || "",
     scheduleLabelToAdd: cfg.scheduleLabelToAdd,
     email: (cfg.emailTo || "").replace(/\s+/g, ""),
     daySchedules: daySchedules
@@ -360,6 +364,12 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
       );
       continue;
     }
+    if (entityHasLabelNameContaining(item, setting.holidayLabelContains)) {
+      Logger.log(
+        logPrefix + " skipped (holiday label still present): " + getEntityName(item)
+      );
+      continue;
+    }
     var hadPauseLabel = entityHasExactLabelName(item, labelToRemove);
     removeLabelIfPresent(item, labelToRemove, logPrefix);
     item.enable();
@@ -391,6 +401,12 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
         );
         continue;
       }
+      if (entityHasLabelNameContaining(shoppingCampaign, setting.holidayLabelContains)) {
+        Logger.log(
+          logPrefix + " skipped (holiday label still present): " + shoppingCampaign.getName()
+        );
+        continue;
+      }
       var scHadPauseLabel = entityHasExactLabelName(shoppingCampaign, labelToRemove);
       removeLabelIfPresent(shoppingCampaign, labelToRemove, logPrefix);
       shoppingCampaign.enable();
@@ -418,6 +434,13 @@ function reEnableScopedItems(setting, labelToRemove, logPrefix) {
       if (entityHasLabelNameContaining(shoppingAdGroup, setting.legacyBudgetLabelContains)) {
         Logger.log(
           logPrefix + " skipped (legacy budget label still present): " +
+          shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName()
+        );
+        continue;
+      }
+      if (entityHasLabelNameContaining(shoppingAdGroup, setting.holidayLabelContains)) {
+        Logger.log(
+          logPrefix + " skipped (holiday label still present): " +
           shoppingAdGroup.getCampaign().getName() + " / " + shoppingAdGroup.getName()
         );
         continue;
